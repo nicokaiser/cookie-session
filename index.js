@@ -16,6 +16,7 @@ var Buffer = require('safe-buffer').Buffer
 var debug = require('debug')('cookie-session')
 var Cookies = require('cookies')
 var onHeaders = require('on-headers')
+const crc = require('crc').crc32
 
 /**
  * Module exports.
@@ -56,6 +57,14 @@ function cookieSession (options) {
   if (!keys && opts.signed) throw new Error('.keys required.')
 
   debug('session options %j', opts)
+
+  // setup encoding/decoding
+  if (typeof opts.encode !== 'function') {
+    opts.encode = encode
+  }
+  if (typeof opts.decode !== 'function') {
+    opts.decode = decode
+  }
 
   return function _cookieSession (req, res, next) {
     var cookies = new Cookies(req, res, {
@@ -167,10 +176,10 @@ Session.create = function create (req, obj) {
 
 Session.deserialize = function deserialize (req, str) {
   var ctx = new SessionContext(req)
-  var obj = decode(str)
+  var obj = req.sessionOptions.decode(str)
 
   ctx._new = false
-  ctx._val = str
+  ctx._val = hash(obj)
 
   return new Session(ctx, obj)
 }
@@ -180,8 +189,8 @@ Session.deserialize = function deserialize (req, str) {
  * @private
  */
 
-Session.serialize = function serialize (sess) {
-  return encode(sess)
+Session.serialize = function serialize (req, sess) {
+  return req.sessionOptions.encode(sess)
 }
 
 /**
@@ -193,7 +202,7 @@ Session.serialize = function serialize (sess) {
 
 Object.defineProperty(Session.prototype, 'isChanged', {
   get: function getIsChanged () {
-    return this._ctx._new || this._ctx._val !== Session.serialize(this)
+    return this._ctx._new || this._ctx._val !== hash(this)
   }
 })
 
@@ -244,7 +253,7 @@ Object.defineProperty(Session.prototype, 'isPopulated', {
 
 Session.prototype.save = function save () {
   var ctx = this._ctx
-  var val = Session.serialize(this)
+  var val = Session.serialize(ctx.req, this)
 
   var cookies = ctx.req.sessionCookies
   var name = ctx.req.sessionKey
@@ -302,6 +311,10 @@ function decode (string) {
 function encode (body) {
   var str = JSON.stringify(body)
   return Buffer.from(str).toString('base64')
+}
+
+function hash (sess) {
+  return crc(JSON.stringify(sess))
 }
 
 /**

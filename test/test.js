@@ -471,6 +471,56 @@ describe('Cookie Session', function () {
         })
     })
   })
+
+  describe('when options.encode and options.decode are function', function () {
+    describe('they are used to encode/decode stored cookie values', function () {
+      it('should work', function (done) {
+        var encodeCallCount = 0
+        var decodeCallCount = 0
+
+        function encode (data) {
+          ++encodeCallCount
+          return JSON.stringify({ enveloped: data })
+        }
+        function decode (data) {
+          ++decodeCallCount
+          return JSON.parse(data).enveloped
+        }
+
+        var app = App({
+          encode: encode,
+          decode: decode
+        })
+
+        app.use(function (req, res, next) {
+          req.session.counter = (req.session.counter || 0) + 1
+          res.end(JSON.stringify(req.session))
+        })
+
+        request(app)
+          .get('/')
+          .expect(function () {
+            assert.ok((encodeCallCount > 0), 'encode was not called')
+          })
+          .expect(200, function (err, res) {
+            if (err) return done(err)
+            assert.equal(res.text, JSON.stringify({ counter: 1 }), 'expected body to be equal to session.counter')
+            var cookies = res.headers['set-cookie'].join(';')
+            request(app)
+              .get('/')
+              .set('Cookie', cookies)
+              .expect(function () {
+                assert.ok((decodeCallCount > 0), 'decode was not called')
+              })
+              .expect(200, function (err, res) {
+                if (err) return done(err)
+                assert.equal(res.text, JSON.stringify({ counter: 2 }))
+                done()
+              })
+          })
+      })
+    })
+  })
 })
 
 function App (options) {

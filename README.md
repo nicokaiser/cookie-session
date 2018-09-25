@@ -81,6 +81,10 @@ change signature parameters like the algorithm of the signature.
 
 A string which will be used as single key if `keys` is not provided.
 
+##### decode/encode
+
+Use `options.encode` and `options.decode` to customize your own encode/decode methods.
+
 ##### Cookie Options
 
 Other options are passed to `cookies.get()` and `cookies.set()` allowing you
